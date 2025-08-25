@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enhanced 3D Options Analysis Chart with Real Data</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { padding: 20px; background-color: #f8f9fa; }
+        form { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        label { font-weight: bold; }
+        .form-group { margin-bottom: 1.5rem; }
+        .description { font-size: 0.9em; color: #6c757d; margin-top: 0.25rem; }
+        #plot, #plot2d { margin: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Enhanced 3D Chart for Options Contract Analysis</h1>
+        <p class="text-center">This tool uses Finnhub API for real-time options data. Sign up for a free account at <a href="https://finnhub.io/register">finnhub.io</a> to get an API key (free tier includes options chain data with rate limits). Enter your API key below. The tool fetches live data for stock price, dividend yield, option premiums, implied volatility, etc.</p>
+        <form id="inputs">
+            <div class="form-group">
+                <label for="api_key">Finnhub API Key:</label>
+                <input type="text" class="form-control" id="api_key" placeholder="Enter your API key">
+                <div class="description">Your API key from Finnhub.io, required to fetch real-time data.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="ticker">Ticker Symbol (e.g., AAPL):</label>
+                <input type="text" class="form-control" id="ticker" value="AAPL" list="tickers-list">
+                <datalist id="tickers-list"></datalist>
+                <div class="description">The stock symbol for which to fetch options data. Auto-complete with tickers from S&P 500 and NASDAQ-100.</div>
+            </div>
+
+            <button type="button" class="btn btn-primary btn-block mb-3" onclick="loadExpirations()">Load Expirations</button>
+
+            <h4>First Contract</h4>
+            <div class="form-group">
+                <label for="expiration">Expiration Date:</label>
+                <select class="form-control" id="expiration" onchange="loadStrikes()"></select>
+                <div class="description">Select the expiration date for the options contract from the loaded list.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="type">Option Type:</label>
+                <select class="form-control" id="type" onchange="loadStrikes()">
+                    <option value="call">Call</option>
+                    <option value="put">Put</option>
+                </select>
+                <div class="description">Choose between Call (right to buy) or Put (right to sell) option.</div>
+            </div>
+
+            <div class="form-group">
+                <label>Strike Price:</label>
+                <div id="strike-grid" class="row overflow-auto" style="max-height: 300px;"></div>
+                <input type="hidden" id="strike" value="">
+                <div class="description">Select the strike price from the boxes below (minimizes scrolling with grid layout).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="position">Position:</label>
+                <select class="form-control" id="position">
+                    <option value="long">Long (Buy)</option>
+                    <option value="short">Short (Sell)</option>
+                </select>
+                <div class="description">Long for buying the option, Short for selling it.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="K">Strike Price (K):</label>
+                <input type="number" class="form-control" id="K" value="100" step="0.01">
+                <div class="description">The strike price of the selected option (auto-filled).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="P">Option Cost (Premium):</label>
+                <input type="number" class="form-control" id="P" value="5" step="0.01">
+                <div class="description">The price paid/received for the option (auto-filled from API).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="exp_date">Expiration Date (auto-filled):</label>
+                <input type="date" class="form-control" id="exp_date" value="2025-09-24">
+                <div class="description">The expiration date of the selected option (auto-filled).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="sig">Volatility (sigma):</label>
+                <input type="number" class="form-control" id="sig" value="0" step="0.01">
+                <div class="description">The implied volatility; set to 0 to calculate from premium (auto-filled from API).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="add_second">Add Second Contract for Strategy:</label>
+                <input type="checkbox" id="add_second" onchange="toggleSecondContract()">
+                <div class="description">Check to add a second option contract to analyze strategies like spreads, straddles, etc.</div>
+            </div>
+
+            <div id="second-contract" style="display: none;">
+                <h4>Second Contract</h4>
+                <div class="form-group">
+                    <label for="expiration2">Expiration Date:</label>
+                    <select class="form-control" id="expiration2" onchange="loadStrikes2()"></select>
+                    <div class="description">Select the expiration date for the second options contract.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="type2">Option Type:</label>
+                    <select class="form-control" id="type2" onchange="loadStrikes2()">
+                        <option value="call">Call</option>
+                        <option value="put">Put</option>
+                    </select>
+                    <div class="description">Choose between Call or Put for the second option.</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Strike Price:</label>
+                    <div id="strike-grid2" class="row overflow-auto" style="max-height: 300px;"></div>
+                    <input type="hidden" id="strike2" value="">
+                    <div class="description">Select the strike price for the second contract.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="position2">Position:</label>
+                    <select class="form-control" id="position2">
+                        <option value="long">Long (Buy)</option>
+                        <option value="short">Short (Sell)</option>
+                    </select>
+                    <div class="description">Long or Short for the second option.</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="K2">Strike Price (K2):</label>
+                    <input type="number" class="form-control" id="K2" value="" step="0.01">
+                    <div class="description">The strike price of the second option (auto-filled).</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="P2">Option Cost (Premium2):</label>
+                    <input type="number" class="form-control" id="P2" value="" step="0.01">
+                    <div class="description">The premium for the second option (auto-filled).</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="exp_date2">Expiration Date (auto-filled2):</label>
+                    <input type="date" class="form-control" id="exp_date2" value="">
+                    <div class="description">The expiration date of the second option (auto-filled).</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="sig2">Volatility (sigma2):</label>
+                    <input type="number" class="form-control" id="sig2" value="0" step="0.01">
+                    <div class="description">The implied volatility for the second option; set to 0 to calculate.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="current_date">Current Date:</label>
+                <input type="date" class="form-control" id="current_date" value="2025-08-24">
+                <div class="description">The starting date for the analysis, typically today's date.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="S0">Current Stock Price (S0):</label>
+                <input type="number" class="form-control" id="S0" value="100" step="0.01">
+                <div class="description">The current market price of the underlying stock (auto-filled from API).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="r">Risk-Free Rate (r):</label>
+                <input type="number" class="form-control" id="r" value="0.05" step="0.01">
+                <div class="description">The risk-free interest rate, e.g., treasury yield (annualized).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="q">Dividend Yield (q):</label>
+                <input type="number" class="form-control" id="q" value="0" step="0.01">
+                <div class="description">The annual dividend yield of the stock (auto-filled from API).</div>
+            </div>
+
+            <button type="button" class="btn btn-success btn-block" onclick="plotChart()">Generate Chart</button>
+        </form>
+
+        <div id="info" class="mt-4 text-center"></div>
+        <div id="plot" style="width: 1000px; height: 800px; margin: auto;"></div>
+        <div id="plot2d" style="width: 1000px; height: 600px; margin: auto;"></div>
+    </div>
+
+    <script>
+        let optionChain = null;
+        let selectedChain = null;
+        let selectedChain2 = null;
+
+        const sp500Tickers = 'MMM, AOS, ABT, ABBV, ACN, ADBE, AMD, AES, AFL, A, APD, ABNB, AKAM, ALB, ALK, ALGN, ALLE, LNT, ALL, GOOGL, GOOG, MO, AMZN, AMCR, AEE, AAL, AEP, AXP, AIG, AMT, AWK, AMP, AME, AMGN, APH, ADI, ANSS, AON, APA, AAPL, AMAT, APTV, ADM, ANET, AJG, AIZ, T,ATO, ADSK, ADP, AZO, AVB, AVY, AXON, BKR, BALL, BAC, BK, BBWI, BAX, BDX, BRK.B, BBY, BIO, TECH, BIIB, BLK, BX, BA, BKNG, BWA, BSX, BMY, AVGO, BR, BRO, BF.B, BLDR, BG, BXP, CDNS, CZR, CPT, CPB, COF, CAH, KMX, CCL, CARR, CTLT, CAT, CBOE, CBRE, CDW, CE, COR, CNC, CNP, CF, CHRW, CRL, SCHW, CHTR, CVX, CMG, CB, CHD, CI, CINF, CTAS, CSCO, C, CFG, CLX, CME, CMS, KO, CTSH, CL, CMCSA, CAG, COP, ED, STZ, CEG, COO, CPRT, GLW, CPAY, CTVA, CSGP, COST, CTRA, CRWD, CCI, CSX, CMI, CVS, DHR, DRI, DVA, DAY, DECK, DE, DAL, DVN, DXCM, FANG, DLR, DFS, DG, DLTR, D, DPZ, DOV, DOW, DHI, DTE, DUK, DD, EMN, ETN, EBAY, ECL, EIX, EW, EA, ELV, EMR, ENPH, ETR, EOG, EPAM, EQT, EFX, EQIX, EQR, ESS, EL, ETSY, EG, EVRG, ES, EXC, EXPE, EXPD, EXR, XOM, FFIV, FDS, FICO, FAST, FRT, FDX, FIS, FITB, FSLR, FE, FI, FMC, F, FTNT, FTV, FOXA, FOX, BEN, FCX, GRMN, IT, GE, GEHC, GEV, GEN, GNRC, GD, GIS, GM, GPC, GILD, GPN, GL, GDDY, GS, HAL, HIG, HAS, HCA, DOC, HSIC, HSY, HES, HPE, HLT, HOLX, HD, HON, HRL, HST, HWM, HPQ, HUBB, HUM, HBAN, HII, IBM, IEX, IDXX, ITW, INCY, IR, PODD, INTC, ICE, IFF, IP, IPG, INTU, ISRG, IVZ, INVH, IQV, IRM, JBHT, JBL, JKHY, J, JN, JN, JN, JN, JCI, JPM, JN, JN, JN, JN, K, KVUE, KDP, KEY, KEYS, KMB, KIM, KMI, KKR, KLAC, KHC, KR, LHX, LH, LRCX, LVS, LDOS, LEN, LLY, LNC, LIN, LYV, LKQ, LMT, L, LOW, LULU, LYB, MTB, MRO, MPC, MKTX, MAR, MMC, MLM, MAS, MA, MTCH, MKC, MCD, MCK, MDT, MRK, META, MET, MTD, MGM, MCHP, MU, MSFT, MAA, MRNA, MHK, MOH, TAP, MDLZ, MPWR, MNST, MCO, MS, MOS, MSI, MSCI, NDAQ, NTAP, NFLX, NEM, NWSA, NWS, NEE, NKE, NI, NDSN, NSC, NTRS, NOC, NCLH, NRG, NUE, NVDA, NVR, NXPI, ORLY, OXY, ODFL, OMC, ON, OKE, ORCL, OTIS, PCAR, PKG, PLTR, PANW, PARA, PH, PAYX, PAYC, PYPL, PNR, PEP, PFE, PCG, PM, PSX, PNW, PNC, POOL, PPG, PPL, PFG, PG, PGR, PLD, PRU, PEG, PTC, PSA, PHM, QRVO, PWR, QCOM, DGX, RL, RJF, RTX, O, REG, REGN, RF, RSG, RMD, RVTY, ROK, ROL, ROP, ROST, RCL, SPGI, CRM, SBAC, SLB, STX, SRE, NOW, SHW, SPG, SWKS, SJM, SW, SNA, SOLV, SO, LUV, SWK, SBUX, STT, STLD, STE, SYK, SMCI, SYF, SNPS, SYY, TMUS, TROW, TTWO, TPR, TRGP, TGT, TEL, TDY, TFX, TER, TSLA, TXN, TXT, TMO, TJX, TSCO, TT, TDG, TRV, TRMB, TFC, TYL, TSN, USB, UBER, UDR, ULTA, UAL, UNP, UAL, UNH, UPS, URI, UNM, VLO, VTR, VLTO, VRSK, VRSN, VZ, VRTX, VTRS, VICI, V, VST, VMC, WRB, WAB, WBA, WMT, DIS, WBD, WM, WAT, WEC, WFC, WELL, WST, WDC, WRK, WY, WMB, WTW, GWW, WYNN, XEL, XYL, YUM, ZBRA, ZBH, ZION, ZTS'.split(', ');
+        const nasdaqTickers = 'AAPL, ABNB, ADBE, ADP, ADSK, AMAT, AMD, AMGN, AMZN, ANSS, ARM, ASML, AVGO, AZN, BKR, BIIB, BKNG, CDNS, CDW, CEG, CHTR, CSCO, CSGP, CSX, CTAS, CTSH, DASH, DDOG, DLTR, EA, EXC, FANG, FAST, FTNT, GEHC, GFS, GILD, GOOG, GOOGL, HON, IDXX, ILMN, INTC, INTU, ISRG, KDP, KLAC, LIN, LRCX, LULU, MAR, MCHP, MDLZ, MELI, META, MNST, MRVL, MSFT, MU, NFLX, NVDA, NXPI, ODFL, ON, ORLY, PANW, PAYX, PCAR, PDD, PEP, PYPL, QCOM, REGN, ROP, ROST, SBUX, SMCI, SNPS, TMUS, TSLA, TTWO, TXN, VRSK, VRTX, WBD, WDAY, XEL, ZM, ZS'.split(', ');
+        const allTickers = [...new Set([...sp500Tickers, ...nasdaqTickers])].sort();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const datalist = document.getElementById('tickers-list');
+            allTickers.forEach(ticker => {
+                const option = document.createElement('option');
+                option.value = ticker;
+                datalist.appendChild(option);
+            });
+        });
+
+        function toggleSecondContract() {
+            const second = document.getElementById('second-contract');
+            second.style.display = document.getElementById('add_second').checked ? 'block' : 'none';
+            if (second.style.display === 'block') {
+                const expSelect2 = document.getElementById('expiration2');
+                expSelect2.innerHTML = document.getElementById('expiration').innerHTML;
+                loadStrikes2();
+            }
+        }
+
+        async function loadExpirations() {
+            const apiKey = document.getElementById('api_key').value;
+            if (!apiKey) {
+                console.error('API key is required.');
+                return;
+            }
+            const ticker = document.getElementById('ticker').value.toUpperCase();
+            const url = `https://finnhub.io/api/v1/stock/option-chain?symbol=${ticker}&token=${apiKey}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Network response was not ok: ' + response.status);
+                const data = await response.json();
+                optionChain = data.data || [];
+                const expirations = [...new Set(optionChain.map(c => c.expirationDate))].sort();
+                const expSelect = document.getElementById('expiration');
+                expSelect.innerHTML = '';
+                expirations.forEach(date => {
+                    const option = document.createElement('option');
+                    option.value = date;
+                    option.text = date;
+                    expSelect.add(option);
+                });
+                if (document.getElementById('add_second').checked) {
+                    const expSelect2 = document.getElementById('expiration2');
+                    expSelect2.innerHTML = expSelect.innerHTML;
+                }
+                // Fetch current stock price
+                const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`;
+                const quoteResponse = await fetch(quoteUrl);
+                if (quoteResponse.ok) {
+                    const quoteData = await quoteResponse.json();
+                    const S0 = quoteData.c || 0;
+                    document.getElementById('S0').value = S0.toFixed(2);
+                }
+                // Fetch dividend yield
+                const profileUrl = `https://finnhub.io/api/v1/stock/profile2?symbol=${ticker}&token=${apiKey}`;
+                const profileResponse = await fetch(profileUrl);
+                if (profileResponse.ok) {
+                    const profileData = await profileResponse.json();
+                    const q = profileData.dividendYield || 0;
+                    document.getElementById('q').value = q.toFixed(4);
+                }
+                loadStrikes();
+            } catch (error) {
+                console.error('Error fetching expirations: ' + error.message);
+            }
+        }
+
+        function loadStrikes() {
+            const date = document.getElementById('expiration').value;
+            const typeValue = document.getElementById('type').value.toUpperCase();
+            if (!date || !optionChain) return;
+            selectedChain = optionChain.find(c => c.expirationDate === date);
+            if (!selectedChain) return;
+            const chain = selectedChain.options[typeValue] || [];
+            const strikes = [...new Set(chain.map(o => o.strike))].sort((a, b) => a - b);
+            const grid = document.getElementById('strike-grid');
+            grid.innerHTML = '';
+            strikes.forEach(strike => {
+                const col = document.createElement('div');
+                col.className = 'col-3 mb-2';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-outline-primary btn-block';
+                btn.textContent = `$ ${strike}`;
+                btn.onclick = () => {
+                    document.getElementById('strike').value = strike;
+                    Array.from(grid.querySelectorAll('button')).forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updatePremium();
+                };
+                col.appendChild(btn);
+                grid.appendChild(col);
+            });
+            document.getElementById('exp_date').value = date;
+            document.getElementById('strike').value = '';
+            updatePremium();
+        }
+
+        function loadStrikes2() {
+            const date = document.getElementById('expiration2').value;
+            const typeValue = document.getElementById('type2').value.toUpperCase();
+            if (!date || !optionChain) return;
+            selectedChain2 = optionChain.find(c => c.expirationDate === date);
+            if (!selectedChain2) return;
+            const chain = selectedChain2.options[typeValue] || [];
+            const strikes = [...new Set(chain.map(o => o.strike))].sort((a, b) => a - b);
+            const grid = document.getElementById('strike-grid2');
+            grid.innerHTML = '';
+            strikes.forEach(strike => {
+                const col = document.createElement('div');
+                col.className = 'col-3 mb-2';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-outline-primary btn-block';
+                btn.textContent = `$ ${strike}`;
+                btn.onclick = () => {
+                    document.getElementById('strike2').value = strike;
+                    Array.from(grid.querySelectorAll('button')).forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    updatePremium2();
+                };
+                col.appendChild(btn);
+                grid.appendChild(col);
+            });
+            document.getElementById('exp_date2').value = date;
+            document.getElementById('strike2').value = '';
+            updatePremium2();
+        }
+
+        function updatePremium() {
+            const strike = parseFloat(document.getElementById('strike').value);
+            const type = document.getElementById('type').value;
+            if (!selectedChain || isNaN(strike)) return;
+            const chainType = type.toUpperCase();
+            const chain = selectedChain.options[chainType] || [];
+            const opt = chain.find(o => o.strike === strike);
+            if (opt) {
+                const P = opt.lastPrice || ((opt.bid + opt.ask) / 2) || 0;
+                document.getElementById('P').value = P.toFixed(2);
+                const sig = opt.impliedVol || 0;
+                document.getElementById('sig').value = sig.toFixed(4);
+                document.getElementById('K').value = strike.toFixed(2);
+            } else {
+                document.getElementById('P').value = '';
+                document.getElementById('sig').value = '';
+                document.getElementById('K').value = '';
+            }
+        }
+
+        function updatePremium2() {
+            const strike = parseFloat(document.getElementById('strike2').value);
+            const type = document.getElementById('type2').value;
+            if (!selectedChain2 || isNaN(strike)) return;
+            const chainType = type.toUpperCase();
+            const chain = selectedChain2.options[chainType] || [];
+            const opt = chain.find(o => o.strike === strike);
+            if (opt) {
+                const P = opt.lastPrice || ((opt.bid + opt.ask) / 2) || 0;
+                document.getElementById('P2').value = P.toFixed(2);
+                const sig = opt.impliedVol || 0;
+                document.getElementById('sig2').value = sig.toFixed(4);
+                document.getElementById('K2').value = strike.toFixed(2);
+            } else {
+                document.getElementById('P2').value = '';
+                document.getElementById('sig2').value = '';
+                document.getElementById('K2').value = '';
+            }
+        }
+
+        function cum_normdist(x) {
+            var b1 = 0.319381530;
+            var b2 = -0.356563782;
+            var b3 = 1.781477937;
+            var b4 = -1.821255978;
+            var b5 = 1.330274429;
+            var p = 0.2316419;
+            var c = 0.39894228;
+
+            if (x >= 0.0) {
+                var t = 1.0 / (1.0 + p * x);
+                return (1.0 - c * Math.exp(-x * x / 2.0) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1));
+            } else {
+                var t = 1.0 / (1.0 - p * x);
+                return (c * Math.exp(-x * x / 2.0) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1));
+            }
+        }
+
+        function d1(S, K, tau, r, sig, q) {
+            return (Math.log(S / K) + (r - q + sig * sig / 2) * tau) / (sig * Math.sqrt(tau));
+        }
+
+        function d2(S, K, tau, r, sig, q) {
+            return d1(S, K, tau, r, sig, q) - sig * Math.sqrt(tau);
+        }
+
+        function bs_call(S, K, tau, r, sig, q) {
+            if (tau <= 0) return Math.max(0, S - K);
+            return S * Math.exp(-q * tau) * cum_normdist(d1(S, K, tau, r, sig, q)) - K * Math.exp(-r * tau) * cum_normdist(d2(S, K, tau, r, sig, q));
+        }
+
+        function bs_put(S, K, tau, r, sig, q) {
+            if (tau <= 0) return Math.max(0, K - S);
+            return K * Math.exp(-r * tau) * cum_normdist(-d2(S, K, tau, r, sig, q)) - S * Math.exp(-q * tau) * cum_normdist(-d1(S, K, tau, r, sig, q));
+        }
+
+        function implied_vol(type, P, S, K, tau, r, q) {
+            var low = 0.0001;
+            var high = 5.0;
+            var max_iter = 100;
+            var epsilon = 0.00001;
+
+            for (var i = 0; i < max_iter; i++) {
+                var mid = (low + high) / 2;
+                var price = (type === 'call') ? bs_call(S, K, tau, r, mid, q) : bs_put(S, K, tau, r, mid, q);
+                if (Math.abs(price - P) < epsilon) return mid;
+                if (price > P) high = mid;
+                else low = mid;
+            }
+            return (low + high) / 2;
+        }
+
+        function calculateBreakeven(type, position, K, P) {
+            if (type === 'call') {
+                return position === 'long' ? K + P : K - P;
+            } else { // put
+                return position === 'long' ? K - P : K + P;
+            }
+        }
+
+        function plotChart() {
+            var currentDateStr = document.getElementById('current_date').value;
+            var currentDate = new Date(currentDateStr);
+            var type1 = document.getElementById('type').value;
+            var position1 = document.getElementById('position').value;
+            var S0 = parseFloat(document.getElementById('S0').value);
+            var K1 = parseFloat(document.getElementById('K').value);
+            var P1 = parseFloat(document.getElementById('P').value);
+            var expDateStr1 = document.getElementById('exp_date').value;
+            var expDate1 = new Date(expDateStr1);
+            var r = parseFloat(document.getElementById('r').value);
+            var q = parseFloat(document.getElementById('q').value);
+            var inputSig1 = parseFloat(document.getElementById('sig').value);
+
+            var addSecond = document.getElementById('add_second').checked;
+            var type2, position2, K2, P2, expDate2, inputSig2;
+            if (addSecond) {
+                type2 = document.getElementById('type2').value;
+                position2 = document.getElementById('position2').value;
+                K2 = parseFloat(document.getElementById('K2').value);
+                P2 = parseFloat(document.getElementById('P2').value);
+                var expDateStr2 = document.getElementById('exp_date2').value;
+                expDate2 = new Date(expDateStr2);
+                inputSig2 = parseFloat(document.getElementById('sig2').value);
+            }
+
+            if (expDate1 <= currentDate || (addSecond && expDate2 <= currentDate)) {
+                console.error('Expiration date must be after current date.');
+                return;
+            }
+
+            var T_days1 = (expDate1 - currentDate) / (1000 * 60 * 60 * 24);
+            var tau1_full = T_days1 / 365;
+            var T_days2 = addSecond ? (expDate2 - currentDate) / (1000 * 60 * 60 * 24) : 0;
+            var tau2_full = addSecond ? T_days2 / 365 : 0;
+            var max_T_days = Math.max(T_days1, T_days2);
+
+            var sig1 = inputSig1;
+            var useImplied1 = false;
+            if (sig1 <= 0) {
+                sig1 = implied_vol(type1, P1, S0, K1, tau1_full, r, q);
+                useImplied1 = true;
+            }
+            var sig2 = addSecond ? inputSig2 : 0;
+            var useImplied2 = false;
+            if (addSecond && sig2 <= 0) {
+                sig2 = implied_vol(type2, P2, S0, K2, tau2_full, r, q);
+                useImplied2 = true;
+            }
+            if (isNaN(sig1) || sig1 <= 0 || (addSecond && (isNaN(sig2) || sig2 <= 0))) {
+                console.error('Could not compute valid volatility. Check inputs.');
+                return;
+            }
+
+            var infoDiv = document.getElementById('info');
+            infoDiv.innerHTML = '<p>Volatility1 (sigma): ' + sig1.toFixed(4) + (useImplied1 ? ' (implied)' : ' (user input)') + '</p>';
+            if (addSecond) {
+                infoDiv.innerHTML += '<p>Volatility2 (sigma): ' + sig2.toFixed(4) + (useImplied2 ? ' (implied)' : ' (user input)') + '</p>';
+                infoDiv.innerHTML += '<p>For strategies, breakeven points may vary and are not automatically calculated.</p>';
+            } else {
+                var breakeven = calculateBreakeven(type1, position1, K1, P1);
+                infoDiv.innerHTML += '<p>Breakeven Stock Price at Expiration: ' + breakeven.toFixed(2) + '</p>';
+            }
+
+            var num_S = 100;
+            var num_dates = 50;
+
+            var S_min = 0.5 * Math.min(S0, K1, addSecond ? K2 : Infinity);
+            var S_max = 1.5 * Math.max(S0, K1, addSecond ? K2 : 0);
+
+            var x = [];
+            for (var i = 0; i < num_S; i++) {
+                x.push(S_min + i * (S_max - S_min) / (num_S - 1));
+            }
+
+            var y = [];
+            var date_step = max_T_days / (num_dates - 1);
+            for (var i = 0; i < num_dates; i++) {
+                var date = new Date(currentDate);
+                date.setDate(date.getDate() + Math.round(i * date_step));
+                y.push(date.toISOString().split('T')[0]);
+            }
+
+            var z = [];
+            for (var i = 0; i < num_dates; i++) {
+                var row = [];
+                var day = i * date_step;
+                var tau_left1 = Math.max(0, (T_days1 - day) / 365);
+                var tau_left2 = addSecond ? Math.max(0, (T_days2 - day) / 365) : 0;
+                for (var j = 0; j < num_S; j++) {
+                    var S = x[j];
+                    var V1 = (type1 === 'call') ? bs_call(S, K1, tau_left1, r, sig1, q) : bs_put(S, K1, tau_left1, r, sig1, q);
+                    var profit1 = (position1 === 'long') ? V1 - P1 : P1 - V1;
+                    var profit2 = 0;
+                    if (addSecond) {
+                        var V2 = (type2 === 'call') ? bs_call(S, K2, tau_left2, r, sig2, q) : bs_put(S, K2, tau_left2, r, sig2, q);
+                        profit2 = (position2 === 'long') ? V2 - P2 : P2 - V2;
+                    }
+                    row.push(profit1 + profit2);
+                }
+                z.push(row);
+            }
+
+            // For 3D surface: symmetric colorscale around zero
+            var allZ = z.flat();
+            var minZ = Math.min(...allZ);
+            var maxZ = Math.max(...allZ);
+            var maxAbs = Math.max(Math.abs(minZ), Math.abs(maxZ));
+            var data = [{
+                x: x,
+                y: y,
+                z: z,
+                type: 'surface',
+                colorscale: [[0, 'red'], [0.5, 'white'], [1, 'green']],
+                cmin: -maxAbs,
+                cmax: maxAbs,
+                showscale: true
+            }];
+
+            var layout = {
+                title: 'Option Profit/Loss Analysis (3D Surface)',
+                scene: {
+                    xaxis: { title: 'Stock Price' },
+                    yaxis: { title: 'Date', type: 'date' },
+                    zaxis: { title: 'Profit/Loss' }
+                },
+                width: 1000,
+                height: 800
+            };
+
+            Plotly.newPlot('plot', data, layout);
+
+            // For 2D plot: colored fills for profit/loss
+            var exp_z = z[z.length - 1];
+            var pos_y = exp_z.map(y => Math.max(y, 0));
+            var neg_y = exp_z.map(y => Math.min(y, 0));
+
+            var pos_fill = {
+                x: x,
+                y: pos_y,
+                type: 'scatter',
+                mode: 'none',
+                fill: 'tozeroy',
+                fillcolor: 'rgba(0, 255, 0, 0.5)',
+                name: 'Profit Area',
+                showlegend: true
+            };
+
+            var neg_fill = {
+                x: x,
+                y: neg_y,
+                type: 'scatter',
+                mode: 'none',
+                fill: 'tozeroy',
+                fillcolor: 'rgba(255, 0, 0, 0.5)',
+                name: 'Loss Area',
+                showlegend: true
+            };
+
+            var main_trace = {
+                x: x,
+                y: exp_z,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Profit/Loss',
+                line: {color: 'black'}
+            };
+
+            var data2d = [pos_fill, neg_fill, main_trace];
+
+            if (!addSecond) {
+                var breakeven = calculateBreakeven(type1, position1, K1, P1);
+                var breakevenTrace = {
+                    x: [breakeven, breakeven],
+                    y: [Math.min(...exp_z), Math.max(...exp_z)],
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Breakeven',
+                    line: {color: 'blue', dash: 'dash'}
+                };
+                data2d.push(breakevenTrace);
+            }
+
+            var layout2d = {
+                title: 'Profit/Loss at Expiration (2D)',
+                xaxis: { title: 'Stock Price' },
+                yaxis: { title: 'Profit/Loss' },
+                width: 1000,
+                height: 600
+            };
+
+            Plotly.newPlot('plot2d', data2d, layout2d);
+        }
+    </script>
+</body>
+</html>
