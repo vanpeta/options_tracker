@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
         body { padding: 20px; background-color: #f8f9fa; }
-        form { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        form { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         label { font-weight: bold; }
         .form-group { margin-bottom: 1.5rem; }
         .description { font-size: 0.9em; color: #6c757d; margin-top: 0.25rem; }
@@ -15,175 +15,180 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container-fluid">
         <h1 class="text-center mb-4">Enhanced 3D Chart for Options Contract Analysis</h1>
         <p class="text-center">This tool uses Finnhub API for real-time options data. Sign up for a free account at <a href="https://finnhub.io/register">finnhub.io</a> to get an API key (free tier includes options chain data with rate limits). Enter your API key below. The tool fetches live data for stock price, dividend yield, option premiums, implied volatility, etc.</p>
-        <form id="inputs">
-            <div class="form-group">
-                <label for="api_key">Finnhub API Key:</label>
-                <input type="text" class="form-control" id="api_key" placeholder="Enter your API key">
-                <div class="description">Your API key from Finnhub.io, required to fetch real-time data.</div>
+        <div class="row">
+            <div class="col-lg-4">
+                <form id="inputs">
+                    <div class="form-group">
+                        <label for="api_key">Finnhub API Key:</label>
+                        <input type="text" class="form-control" id="api_key" placeholder="Enter your API key">
+                        <div class="description">Your API key from Finnhub.io, required to fetch real-time data.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ticker">Ticker Symbol (e.g., AAPL):</label>
+                        <input type="text" class="form-control" id="ticker" value="AAPL" list="tickers-list">
+                        <datalist id="tickers-list"></datalist>
+                        <div class="description">The stock symbol for which to fetch options data. Auto-complete with tickers from S&P 500 and NASDAQ-100.</div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-block mb-3" onclick="loadExpirations()">Load Expirations</button>
+
+                    <h4>First Contract</h4>
+                    <div class="form-group">
+                        <label for="expiration">Expiration Date:</label>
+                        <select class="form-control" id="expiration" onchange="loadStrikes()"></select>
+                        <div class="description">Select the expiration date for the options contract from the loaded list.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="type">Option Type:</label>
+                        <select class="form-control" id="type" onchange="loadStrikes()">
+                            <option value="call">Call</option>
+                            <option value="put">Put</option>
+                        </select>
+                        <div class="description">Choose between Call (right to buy) or Put (right to sell) option.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Strike Price:</label>
+                        <div id="strike-grid" class="row overflow-auto" style="max-height: 300px;"></div>
+                        <input type="hidden" id="strike" value="">
+                        <div class="description">Select the strike price from the boxes below (minimizes scrolling with grid layout).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="position">Position:</label>
+                        <select class="form-control" id="position">
+                            <option value="long">Long (Buy)</option>
+                            <option value="short">Short (Sell)</option>
+                        </select>
+                        <div class="description">Long for buying the option, Short for selling it.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="K">Strike Price (K):</label>
+                        <input type="number" class="form-control" id="K" value="100" step="0.01">
+                        <div class="description">The strike price of the selected option (auto-filled).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="P">Option Cost (Premium):</label>
+                        <input type="number" class="form-control" id="P" value="5" step="0.01">
+                        <div class="description">The price paid/received for the option (auto-filled from API).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="exp_date">Expiration Date (auto-filled):</label>
+                        <input type="date" class="form-control" id="exp_date" value="2025-09-24">
+                        <div class="description">The expiration date of the selected option (auto-filled).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sig">Volatility (sigma):</label>
+                        <input type="number" class="form-control" id="sig" value="0" step="0.01">
+                        <div class="description">The implied volatility; set to 0 to calculate from premium (auto-filled from API).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="add_second">Add Second Contract for Strategy:</label>
+                        <input type="checkbox" id="add_second" onchange="toggleSecondContract()">
+                        <div class="description">Check to add a second option contract to analyze strategies like spreads, straddles, etc.</div>
+                    </div>
+
+                    <div id="second-contract" style="display: none;">
+                        <h4>Second Contract</h4>
+                        <div class="form-group">
+                            <label for="expiration2">Expiration Date:</label>
+                            <select class="form-control" id="expiration2" onchange="loadStrikes2()"></select>
+                            <div class="description">Select the expiration date for the second options contract.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="type2">Option Type:</label>
+                            <select class="form-control" id="type2" onchange="loadStrikes2()">
+                                <option value="call">Call</option>
+                                <option value="put">Put</option>
+                            </select>
+                            <div class="description">Choose between Call or Put for the second option.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Strike Price:</label>
+                            <div id="strike-grid2" class="row overflow-auto" style="max-height: 300px;"></div>
+                            <input type="hidden" id="strike2" value="">
+                            <div class="description">Select the strike price for the second contract.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="position2">Position:</label>
+                            <select class="form-control" id="position2">
+                                <option value="long">Long (Buy)</option>
+                                <option value="short">Short (Sell)</option>
+                            </select>
+                            <div class="description">Long or Short for the second option.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="K2">Strike Price (K2):</label>
+                            <input type="number" class="form-control" id="K2" value="" step="0.01">
+                            <div class="description">The strike price of the second option (auto-filled).</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="P2">Option Cost (Premium2):</label>
+                            <input type="number" class="form-control" id="P2" value="" step="0.01">
+                            <div class="description">The premium for the second option (auto-filled).</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="exp_date2">Expiration Date (auto-filled2):</label>
+                            <input type="date" class="form-control" id="exp_date2" value="">
+                            <div class="description">The expiration date of the second option (auto-filled).</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sig2">Volatility (sigma2):</label>
+                            <input type="number" class="form-control" id="sig2" value="0" step="0.01">
+                            <div class="description">The implied volatility for the second option; set to 0 to calculate.</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="current_date">Current Date:</label>
+                        <input type="date" class="form-control" id="current_date" value="2025-08-24">
+                        <div class="description">The starting date for the analysis, typically today's date.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="S0">Current Stock Price (S0):</label>
+                        <input type="number" class="form-control" id="S0" value="100" step="0.01">
+                        <div class="description">The current market price of the underlying stock (auto-filled from API).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="r">Risk-Free Rate (r):</label>
+                        <input type="number" class="form-control" id="r" value="0.05" step="0.01">
+                        <div class="description">The risk-free interest rate, e.g., treasury yield (annualized).</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="q">Dividend Yield (q):</label>
+                        <input type="number" class="form-control" id="q" value="0" step="0.01">
+                        <div class="description">The annual dividend yield of the stock (auto-filled from API).</div>
+                    </div>
+
+                    <button type="button" class="btn btn-success btn-block" onclick="plotChart()">Generate Chart</button>
+                </form>
             </div>
-
-            <div class="form-group">
-                <label for="ticker">Ticker Symbol (e.g., AAPL):</label>
-                <input type="text" class="form-control" id="ticker" value="AAPL" list="tickers-list">
-                <datalist id="tickers-list"></datalist>
-                <div class="description">The stock symbol for which to fetch options data. Auto-complete with tickers from S&P 500 and NASDAQ-100.</div>
+            <div class="col-lg-8">
+                <div id="info" class="mt-4 text-center"></div>
+                <div id="plot" style="width: 100%; height: 800px; margin: auto;"></div>
+                <div id="plot2d" style="width: 100%; height: 600px; margin: auto;"></div>
             </div>
-
-            <button type="button" class="btn btn-primary btn-block mb-3" onclick="loadExpirations()">Load Expirations</button>
-
-            <h4>First Contract</h4>
-            <div class="form-group">
-                <label for="expiration">Expiration Date:</label>
-                <select class="form-control" id="expiration" onchange="loadStrikes()"></select>
-                <div class="description">Select the expiration date for the options contract from the loaded list.</div>
-            </div>
-
-            <div class="form-group">
-                <label for="type">Option Type:</label>
-                <select class="form-control" id="type" onchange="loadStrikes()">
-                    <option value="call">Call</option>
-                    <option value="put">Put</option>
-                </select>
-                <div class="description">Choose between Call (right to buy) or Put (right to sell) option.</div>
-            </div>
-
-            <div class="form-group">
-                <label>Strike Price:</label>
-                <div id="strike-grid" class="row overflow-auto" style="max-height: 300px;"></div>
-                <input type="hidden" id="strike" value="">
-                <div class="description">Select the strike price from the boxes below (minimizes scrolling with grid layout).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="position">Position:</label>
-                <select class="form-control" id="position">
-                    <option value="long">Long (Buy)</option>
-                    <option value="short">Short (Sell)</option>
-                </select>
-                <div class="description">Long for buying the option, Short for selling it.</div>
-            </div>
-
-            <div class="form-group">
-                <label for="K">Strike Price (K):</label>
-                <input type="number" class="form-control" id="K" value="100" step="0.01">
-                <div class="description">The strike price of the selected option (auto-filled).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="P">Option Cost (Premium):</label>
-                <input type="number" class="form-control" id="P" value="5" step="0.01">
-                <div class="description">The price paid/received for the option (auto-filled from API).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="exp_date">Expiration Date (auto-filled):</label>
-                <input type="date" class="form-control" id="exp_date" value="2025-09-24">
-                <div class="description">The expiration date of the selected option (auto-filled).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="sig">Volatility (sigma):</label>
-                <input type="number" class="form-control" id="sig" value="0" step="0.01">
-                <div class="description">The implied volatility; set to 0 to calculate from premium (auto-filled from API).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="add_second">Add Second Contract for Strategy:</label>
-                <input type="checkbox" id="add_second" onchange="toggleSecondContract()">
-                <div class="description">Check to add a second option contract to analyze strategies like spreads, straddles, etc.</div>
-            </div>
-
-            <div id="second-contract" style="display: none;">
-                <h4>Second Contract</h4>
-                <div class="form-group">
-                    <label for="expiration2">Expiration Date:</label>
-                    <select class="form-control" id="expiration2" onchange="loadStrikes2()"></select>
-                    <div class="description">Select the expiration date for the second options contract.</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="type2">Option Type:</label>
-                    <select class="form-control" id="type2" onchange="loadStrikes2()">
-                        <option value="call">Call</option>
-                        <option value="put">Put</option>
-                    </select>
-                    <div class="description">Choose between Call or Put for the second option.</div>
-                </div>
-
-                <div class="form-group">
-                    <label>Strike Price:</label>
-                    <div id="strike-grid2" class="row overflow-auto" style="max-height: 300px;"></div>
-                    <input type="hidden" id="strike2" value="">
-                    <div class="description">Select the strike price for the second contract.</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="position2">Position:</label>
-                    <select class="form-control" id="position2">
-                        <option value="long">Long (Buy)</option>
-                        <option value="short">Short (Sell)</option>
-                    </select>
-                    <div class="description">Long or Short for the second option.</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="K2">Strike Price (K2):</label>
-                    <input type="number" class="form-control" id="K2" value="" step="0.01">
-                    <div class="description">The strike price of the second option (auto-filled).</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="P2">Option Cost (Premium2):</label>
-                    <input type="number" class="form-control" id="P2" value="" step="0.01">
-                    <div class="description">The premium for the second option (auto-filled).</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="exp_date2">Expiration Date (auto-filled2):</label>
-                    <input type="date" class="form-control" id="exp_date2" value="">
-                    <div class="description">The expiration date of the second option (auto-filled).</div>
-                </div>
-
-                <div class="form-group">
-                    <label for="sig2">Volatility (sigma2):</label>
-                    <input type="number" class="form-control" id="sig2" value="0" step="0.01">
-                    <div class="description">The implied volatility for the second option; set to 0 to calculate.</div>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label for="current_date">Current Date:</label>
-                <input type="date" class="form-control" id="current_date" value="2025-08-24">
-                <div class="description">The starting date for the analysis, typically today's date.</div>
-            </div>
-
-            <div class="form-group">
-                <label for="S0">Current Stock Price (S0):</label>
-                <input type="number" class="form-control" id="S0" value="100" step="0.01">
-                <div class="description">The current market price of the underlying stock (auto-filled from API).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="r">Risk-Free Rate (r):</label>
-                <input type="number" class="form-control" id="r" value="0.05" step="0.01">
-                <div class="description">The risk-free interest rate, e.g., treasury yield (annualized).</div>
-            </div>
-
-            <div class="form-group">
-                <label for="q">Dividend Yield (q):</label>
-                <input type="number" class="form-control" id="q" value="0" step="0.01">
-                <div class="description">The annual dividend yield of the stock (auto-filled from API).</div>
-            </div>
-
-            <button type="button" class="btn btn-success btn-block" onclick="plotChart()">Generate Chart</button>
-        </form>
-
-        <div id="info" class="mt-4 text-center"></div>
-        <div id="plot" style="width: 1000px; height: 800px; margin: auto;"></div>
-        <div id="plot2d" style="width: 1000px; height: 600px; margin: auto;"></div>
+        </div>
     </div>
 
     <script>
@@ -236,10 +241,14 @@
                     option.text = date;
                     expSelect.add(option);
                 });
-                if (document.getElementById('add_second').checked) {
-                    const expSelect2 = document.getElementById('expiration2');
-                    expSelect2.innerHTML = expSelect.innerHTML;
-                }
+                const expSelect2 = document.getElementById('expiration2');
+                expSelect2.innerHTML = '';
+                expirations.forEach(date => {
+                    const option = document.createElement('option');
+                    option.value = date;
+                    option.text = date;
+                    expSelect2.add(option);
+                });
                 // Fetch current stock price
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${apiKey}`;
                 const quoteResponse = await fetch(quoteUrl);
@@ -459,7 +468,7 @@
             var tau1_full = T_days1 / 365;
             var T_days2 = addSecond ? (expDate2 - currentDate) / (1000 * 60 * 60 * 24) : 0;
             var tau2_full = addSecond ? T_days2 / 365 : 0;
-            var max_T_days = Math.max(T_days1, T_days2);
+            var max_T_days = Math.max(T_days1, T_days2 || 0);
 
             var sig1 = inputSig1;
             var useImplied1 = false;
@@ -594,7 +603,7 @@
 
             var data2d = [pos_fill, neg_fill, main_trace];
 
-            if (!addSecond) {
+            if (!document.getElementById('add_second').checked) {
                 var breakeven = calculateBreakeven(type1, position1, K1, P1);
                 var breakevenTrace = {
                     x: [breakeven, breakeven],

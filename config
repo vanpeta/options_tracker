@@ -1,0 +1,13 @@
+# vanpeta's account
+Host github.com-vanpeta
+Hostname github.com
+User git
+IdentityFile ~/.ssh/id_ed25519_vanpeta
+
+# Other accounts
+Host github.com-carlosallende
+Hostname github.com
+User git
+IdentityFile ~/ssh/id_ed25519
+IdentityOnly yes
+
